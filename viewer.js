@@ -1,7 +1,7 @@
 /**
- * Rendering library for codex-trace logs.
+ * Rendering library for opencode-trace logs.
  *
- * A codex-trace log is a sequence of jsonl lines in an unterminated `<!` + `--` comment at the end of an HTML document.
+ * An opencode-trace log is a sequence of jsonl lines in an unterminated `<!` + `--` comment at the end of an HTML document.
  * This module extracts that log and renders each line as a collapsible tree-structure.
  *
  * There's a little bit of cleverness. This module uses a `render()` function to determine how nodes in the tree
@@ -12,7 +12,7 @@
  * as "▷ TITLE: INLINE" when collapsed, or "▽ TITLE" when expanded, with 'body' an object/array/primitive for
  * the contents of that expanded node. The `open` flag says whether it should be initially expanded.
  *
- * This module has special handling for REQUEST and RESPONSE json payloads for Codex's communication with an LLM.
+ * This module has special handling for REQUEST and RESPONSE json payloads for Opencode's communication with an LLM.
  */
 
 const TITLE = Symbol('TITLE');
@@ -52,7 +52,9 @@ function ts(data) {
  * Puts a string onto a single line and truncates to 80 chars, for display in INLINE part of a node
  */
 function short(s) {
-  return String(s ?? '').replace(/\n/g, ' ').slice(0, 80);
+  return String(s ?? '')
+    .replace(/\n/g, ' ')
+    .slice(0, 80);
 }
 
 /**
@@ -64,12 +66,41 @@ function contentText(contents) {
   if (!Array.isArray(contents)) return JSON.stringify(contents ?? '');
   let r = [];
   for (const c of contents ?? []) {
-    const type = c && typeof c === 'object' ? c.type : undefined;
-    const text = c && typeof c === 'object' ? c.text : c;
-    if (type === 'input_text' || type === 'output_text' || type === 'text') r.push(String(text ?? ''));
+    const type = c && typeof c === 'object' ? deltaField(c, 'type') : undefined;
+    const text = c && typeof c === 'object' ? deltaField(c, 'text') : c;
+    if (type === 'input_text' || type === 'output_text' || type === 'text')
+      r.push(String(text ?? ''));
     else r.push(`[${String(type ?? '?')}]`);
   }
   return r.join('\n');
+}
+
+/**
+ * The payload uses deltas which rename keys, so instead of r.content we might
+ * see r.*content or r.content+ or r.content-. This function gets whichever.
+ */
+function deltaField(data, key) {
+  return deltaFieldInfo(data, key).value;
+}
+
+function deltaFieldInfo(data, key) {
+  if (!data || typeof data !== 'object') return {value: undefined, marker: ''};
+  if (data[key] !== undefined) return {value: data[key], marker: ''};
+  if (data[`+${key}`] !== undefined) return {value: data[`+${key}`], marker: '[+] '};
+  if (data[`${key}+`] !== undefined) return {value: data[`${key}+`], marker: '[+] '};
+  if (data[`-${key}`] !== undefined) return {value: data[`-${key}`], marker: '[-] '};
+  if (data[`${key}-`] !== undefined) return {value: data[`${key}-`], marker: '[-] '};
+  if (data[`*${key}`] !== undefined) return {value: data[`*${key}`], marker: '[*] '};
+  return {value: undefined, marker: ''};
+}
+
+function deltaMarker(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return '';
+  const keys = Object.keys(data);
+  if (keys.some(k => k.startsWith('*'))) return '[*] ';
+  if (keys.some(k => k.startsWith('+') || k.endsWith('+'))) return '[+] ';
+  if (keys.some(k => k.startsWith('-') || k.endsWith('-'))) return '[-] ';
+  return '';
 }
 
 /**
@@ -79,50 +110,70 @@ function renderPayload(elements) {
   if (!Array.isArray(elements)) return [];
   const payload = [];
   for (const e of elements) {
-    if (e === '...') {
-      payload.push({[TITLE]: 'Added...'});
-    } else if (e === '---') {
-      payload.push({[TITLE]: 'Removed...'});
-    } else if (e.type === 'message' || (e.type === undefined && e.role !== undefined && e.content !== undefined)) {
-      payload.push({
-        [TITLE]: `${payload.length}: message(${esc(e.role)}): `,
-        [INLINE]: esc(short(contentText(e.content))),
-        body: contentText(e.content),
+    const eContent = deltaField(e, 'content'); // because it might be e.content or e.*content or e.content+ or e.content-
+    const eText = deltaField(e, 'text');
+    const eOutput = deltaField(e, 'output');
+    const eArguments = deltaField(e, 'arguments');
+    const eInput = deltaField(e, 'input');
+    const eName = deltaField(e, 'name');
+    const eType = deltaField(e, 'type');
+    const marker = deltaMarker(e);
+    if (e === '...' || e === '...*' || e === '---') {
+      continue;
+    } else if (
+      eType === 'message' ||
+      (eType === undefined && e.role !== undefined && eContent !== undefined)
+    ) {
+      const contents = Array.isArray(eContent) ? eContent : [eContent];
+      contents.forEach(content => {
+        if (content === '...' || content === '...*' || content === '---') {
+          return;
+        }
+        const text = contentText(Array.isArray(eContent) ? [content] : content);
+        payload.push({
+          [TITLE]: `${marker}message(${esc(e.role)}): `,
+          [INLINE]: esc(short(text)),
+          body: text,
+        });
       });
-    } else if (e.type === 'input_text' || e.type === 'output_text' || e.type === 'text') {
+    } else if (eType === 'input_text' || eType === 'output_text' || eType === 'text') {
       payload.push({
-        [TITLE]: `${payload.length}: ${e.type}: `,
-        [INLINE]: esc(short(String(e.text ?? ''))),
-        body: e.text,
+        [TITLE]: `${marker}${eType}: `,
+        [INLINE]: esc(short(String(eText ?? ''))),
+        body: eText,
       });
-
-    } else if (e.type === 'function_call_output' || e.type === 'tool_result') {
-      const result = (e.type === 'function_call_output') ? 
-      (typeof e.output === 'string' ? e.output : JSON.stringify(e.output ?? ''))
-      : typeof e.content === 'string' ? e.content : contentText(e.content);
+    } else if (eType === 'function_call_output' || eType === 'tool_result') {
+      const result =
+        eType === 'function_call_output'
+          ? typeof eOutput === 'string'
+            ? eOutput
+            : JSON.stringify(eOutput ?? '')
+          : typeof eContent === 'string'
+            ? eContent
+            : contentText(eContent);
       payload.push({
-        [TITLE]: `${payload.length}: `,
-        [INLINE]: `${esc(e.type)}: ${esc(short(result))}`,
+        [TITLE]: marker,
+        [INLINE]: `${esc(eType)}: ${esc(short(result))}`,
         body: e,
       });
-    } else if (e.type === 'function_call' || e.type === 'tool_use') {
-      let arg = "";
+    } else if (eType === 'function_call' || eType === 'tool_use') {
+      let arg = '';
       try {
-        const raw = e.type === 'function_call' ? JSON.parse(e.arguments) : e.input;
+        const raw = eType === 'function_call' ? JSON.parse(eArguments) : eInput;
         const rawArg = raw?.cmd ?? raw?.pattern ?? raw;
         arg = typeof rawArg === 'string' ? rawArg : JSON.stringify(rawArg ?? '');
       } catch (e) {
         arg = '...';
       }
       payload.push({
-        [TITLE]: `${payload.length}: `,
-        [INLINE]: `${esc(e.type)}: ${esc(e.name ?? '???')}(${esc(short(arg))})`,
+        [TITLE]: marker,
+        [INLINE]: `${esc(eType)}: ${esc(eName ?? '???')}(${esc(short(arg))})`,
         body: e,
       });
     } else {
       payload.push({
-        [TITLE]: `${payload.length}: `,
-        [INLINE]: esc(e.type ?? '???'),
+        [TITLE]: marker,
+        [INLINE]: esc(eType ?? '???'),
         body: e,
       });
     }
@@ -138,28 +189,29 @@ function renderPayload(elements) {
  * Otherwise, renders primtives, objects, arrays in the obvious way.
  */
 function render(data, label) {
-  const deltaField = (key) => data[key] ?? data[`${key}+`] ?? data[`${key}-`] ?? data[`*${key}`];
   const id = data?._id !== undefined ? ` #${esc(String(data._id))}` : '';
   const purpose = data?._purpose ? ` ${esc(String(data._purpose))}` : '';
   if (data?.[TITLE] !== undefined) {
     return data;
   } else if (data?._kind === 'request') {
-    const rendered = renderPayload(deltaField('input') ?? deltaField('messages'));
+    const rendered = renderPayload(deltaField(data, 'input') ?? deltaField(data, 'messages'));
     const raw = {...data};
     delete raw._kind;
+    const title = `REQUEST${id}${purpose}`;
     return {
-      [TITLE]: `[${esc(ts(data))}] <b>REQUEST${id}${purpose}</b> `,
+      [TITLE]: `[${esc(ts(data))}] ${data._purpose === '[meta]' ? title : `<b>${title}</b>`} `,
       body: [...rendered, {[TITLE]: 'raw', body: raw}],
-      open: true,
+      open: data._purpose !== '[meta]',
     };
   } else if (data?._kind === 'response') {
-    const payload = renderPayload(deltaField('output') ?? deltaField('content'));
+    const payload = renderPayload(deltaField(data, 'output') ?? deltaField(data, 'content'));
     const raw = {...data};
     delete raw._kind;
+    const title = `RESPONSE${id}${purpose}`;
     return {
-      [TITLE]: `[${esc(ts(data))}] <b>RESPONSE${id}${purpose}</b> `,
+      [TITLE]: `[${esc(ts(data))}] ${data._purpose === '[meta]' ? title : `<b>${title}</b>`} `,
       body: [...payload, {[TITLE]: 'raw', body: raw}],
-      open: true,
+      open: data._purpose !== '[meta]',
     };
   } else if (data?._kind === 'error') {
     const raw = {...data};
