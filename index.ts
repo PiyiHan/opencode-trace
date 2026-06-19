@@ -194,7 +194,7 @@ function delta(prev: unknown, next: unknown): [unknown, boolean] {
     for (const k of [...prevKeys].filter(k => nextKeys.has(k)).sort()) {
       const [sub, same] = delta(prev[k], next[k]);
       if (same) {
-        const raw = JSON.stringify(next[k]);
+        const raw = JSON.stringify(next[k]) ?? '';
         out[k] =
           raw.length < 128
             ? next[k]
@@ -249,8 +249,8 @@ function delta(prev: unknown, next: unknown): [unknown, boolean] {
     let right: Array<readonly [unknown, string]> = next.slice(i).map(v => [v, hash(v)] as const);
     const add: unknown[] = [];
     const del: unknown[] = [];
-    for (const [value, hash] of left) {
-      const ix = right.findIndex(item => item[1] === hash);
+    for (const [value, sig] of left) {
+      const ix = right.findIndex(item => item[1] === sig);
       if (ix === -1) {
         del.push(value);
         continue;
