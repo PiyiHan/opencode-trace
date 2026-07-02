@@ -1,31 +1,33 @@
 # opencode-trace
 
-This opencode plugin lets you see the raw json requests made to the LLM, and the responses.
-* Example: https://ljw1004.github.io/opencode-trace/example.html
+Captures raw LLM request/response payloads as interactive HTML files in `~/opencode-trace/`.
+
+Example: https://ljw1004.github.io/opencode-trace/example.html
 
 ## Installation
 
-Choose one of the following methods.
-
-### Option 1: Copy the files (recommended for forks)
+### Copy files (recommended for forks)
 
 ```bash
 git clone https://github.com/PiyiHan/opencode-trace.git /tmp/opencode-trace
-cp /tmp/opencode-trace/opencode-trace.ts /tmp/opencode-trace/viewer.js ~/.config/opencode/plugins/
+cp /tmp/opencode-trace/opencode-trace.ts /tmp/opencode-trace/viewer.js /tmp/opencode-trace/package.json ~/.config/opencode/plugins/
 rm -rf /tmp/opencode-trace
 ```
 
-Make sure `~/.config/opencode/plugins/package.json` exists with `{"type": "module"}`:
+The `package.json` tells Node.js the plugin uses ES modules (`"type": "module"`). All 3 files are required.
+
+### Symlink (for development)
 
 ```bash
-echo '{"type": "module"}' > ~/.config/opencode/plugins/package.json
+git clone https://github.com/PiyiHan/opencode-trace.git ~/Codes/opencode-trace
+ln -s ~/Codes/opencode-trace/opencode-trace.ts ~/.config/opencode/plugins/
+ln -s ~/Codes/opencode-trace/viewer.js ~/.config/opencode/plugins/
+cp ~/Codes/opencode-trace/package.json ~/.config/opencode/plugins/
 ```
 
-Restart OpenCode and you'll see each transcript stored in `~/opencode-trace`.
+Edits to `~/Codes/opencode-trace/` take effect immediately after restarting opencode.
 
-### Option 2: npm (original)
-
-Add the package to your OpenCode config:
+### npm (original upstream)
 
 ```json
 {
@@ -34,9 +36,7 @@ Add the package to your OpenCode config:
 }
 ```
 
-Restart OpenCode and you'll see each transcript stored in `~/opencode-trace`.
-
-That installation path by default uses `@latest`, which opencode currently does't refresh when latest changes. You can force a refresh with `rm -rf ~/.cache/opencode/packages/@ljw1004/opencode-trace@latest`
+Restart OpenCode. To force a refresh after changes: `rm -rf ~/.cache/opencode/packages/@ljw1004/opencode-trace@latest`
 
 ## Viewing traces
 

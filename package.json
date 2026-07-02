@@ -7,7 +7,7 @@
   "exports": "./opencode-trace.ts",
   "main": "./opencode-trace.ts",
   "files": [
-    "index.ts",
+    "opencode-trace.ts",
     "viewer.js",
     "README.md",
     "LICENSE"
@@ -30,7 +30,7 @@
     "access": "public"
   },
   "scripts": {
-    "lint": "eslint index.ts",
+    "lint": "eslint opencode-trace.ts",
     "typecheck": "tsc"
   },
   "devDependencies": {
