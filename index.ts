@@ -1,10 +1,10 @@
 /**
  * OpenCode server plugin which captures raw LLM HTTP payloads to `~/opencode-trace`.
  *
- * Each trace is an interactive html file whose trailing unterminated html-comment contains
- * one json object per line. To read the logs programmatically, strip everything up to that
-  * final comment. To browse them interactively, open the html file directly in a browser.
-  *
+ * Each trace is an interactive html file whose trailing unterminated `<script type="text/plain">`
+ * contains one json object per line. To read the logs programmatically, strip everything up to
+ * that final script tag. To browse them interactively, open the html file directly in a browser.
+ *
  * The plugin loads `./viewer.js` at runtime and embeds it into each new html trace, while also
  * preferring a sibling `viewer.js` if one exists next to the saved html file.
  */
@@ -38,7 +38,7 @@ const PREAMBLE = `<!DOCTYPE html>
 <body>
 </body>
 </html>
-${"<!" + "--"}
+<script id="__trace_data__" type="text/plain">
 `
 
 /** Mutable global state: maps OpenCode session ids to the html logfile path for that session. */
@@ -127,7 +127,7 @@ function writeNoThrow(id: string, name: string, row: Record<string, unknown>): v
       )
     }
     files.set(id, file)
-    appendFileSync(file, `${JSON.stringify(row).replace(/-->/g, "--\\u003e")}\n`)
+    appendFileSync(file, `${JSON.stringify(row).replace(/<\//g, '<\\/')}\n`)
   } catch {
     // Intentionally swallow tracing I/O failures so plugin logging can't crash OpenCode.
   }

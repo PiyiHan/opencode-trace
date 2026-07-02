@@ -1,8 +1,8 @@
 /**
  * Rendering library for opencode-trace logs.
  *
- * An opencode-trace log is a sequence of jsonl lines in an unterminated `<!` + `--` comment at the end of an HTML document.
- * This module extracts that log and renders each line as a collapsible tree-structure.
+ * An opencode-trace log is a sequence of jsonl lines in an unterminated `<script id="__trace_data__" type="text/plain">`
+ * at the end of an HTML document. This module extracts that log and renders each line as a collapsible tree-structure.
  *
  * There's a little bit of cleverness. This module uses a `render()` function to determine how nodes in the tree
  * should be rendered. Normally they're rendered in the normal way (primitives as leaf nodes, objects and arrays as
@@ -299,22 +299,29 @@ function buildNode(data, label) {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (
-    document.lastChild &&
-    document.lastChild.nodeType === Node.COMMENT_NODE &&
-    document.lastChild.data.trim()
-  ) {
-    for (const line of document.lastChild.data.split(/\r?\n/).filter(Boolean)) {
-      let data = '';
-      try {
-        data = JSON.parse(line);
-      } catch (e) {
-        data = {error: String(e), raw: line};
-      }
-      const node = buildNode(data, 'json:');
-      node.classList.add('log-entry');
-      document.body.appendChild(node);
+function readTraceData() {
+  var el = document.getElementById('__trace_data__');
+  if (el) return el.textContent || '';
+  for (var i = document.childNodes.length - 1; i >= 0; i--) {
+    if (document.childNodes[i].nodeType === Node.COMMENT_NODE) {
+      return document.childNodes[i].data;
     }
+  }
+  return '';
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const raw = readTraceData();
+  if (!raw.trim()) return;
+  for (const line of raw.split(/\r?\n/).filter(Boolean)) {
+    let data = '';
+    try {
+      data = JSON.parse(line);
+    } catch (e) {
+      data = {error: String(e), raw: line};
+    }
+    const node = buildNode(data, 'json:');
+    node.classList.add('log-entry');
+    document.body.appendChild(node);
   }
 });
