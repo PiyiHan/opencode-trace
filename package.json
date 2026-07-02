@@ -4,8 +4,8 @@
   "description": "OpenCode plugin that saves raw json LLM request+responses as jsonl in ~/opencode-trace, with built-in HTML interactive viewer",
   "license": "MIT",
   "type": "module",
-  "exports": "./index.ts",
-  "main": "./index.ts",
+  "exports": "./opencode-trace.ts",
+  "main": "./opencode-trace.ts",
   "files": [
     "index.ts",
     "viewer.js",

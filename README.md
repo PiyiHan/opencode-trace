@@ -7,10 +7,18 @@ This opencode plugin lets you see the raw json requests made to the LLM, and the
 
 Choose one of the following methods.
 
-### Option 1: Copy the folder (recommended for forks)
+### Option 1: Copy the files (recommended for forks)
 
 ```bash
-git clone https://github.com/PiyiHan/opencode-trace.git ~/.config/opencode/plugins/opencode-trace
+git clone https://github.com/PiyiHan/opencode-trace.git /tmp/opencode-trace
+cp /tmp/opencode-trace/opencode-trace.ts /tmp/opencode-trace/viewer.js ~/.config/opencode/plugins/
+rm -rf /tmp/opencode-trace
+```
+
+Make sure `~/.config/opencode/plugins/package.json` exists with `{"type": "module"}`:
+
+```bash
+echo '{"type": "module"}' > ~/.config/opencode/plugins/package.json
 ```
 
 Restart OpenCode and you'll see each transcript stored in `~/opencode-trace`.
